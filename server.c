@@ -164,7 +164,7 @@ void handle_request(struct server_app *app, int client_socket) {
     	proxy_remote_file(app,client_socket,file_name);
     }
     else {
-	    exit(EXIT_FAILURE)
+      exit(EXIT_FAILURE);
     }
     strcat(request, content_type);
     strcat(request, "\r\n");
@@ -209,24 +209,86 @@ void proxy_remote_file(struct server_app *app, int client_socket, const char *re
 	
     char response[] = "HTTP/1.0 501 Not Implemented\r\n\r\n";
     send(client_socket, response, strlen(response), 0);
-
-    int remote_socket;
-    struct hostend *server
+    struct sockaddr_in server_address;
+    int server_socket;
+    struct hostend *server;
+    int n;
+    char buffer[BUFFER_SIZE];
     //Create socket
-    remote_socket = socket(AF_INTE,SOCK_STREAM,0);
+    if((server_socket = socket(AF_INET,SOCK_STREAM,0))==-1){
+      perror("Error creating server socket");
+      exit(EXIT_FAILURE);
+    }
+    //Bind server socket to port
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(app.server_port);
+    server_address.sin_addr.s_addr=INNADDR_ANY;
+    memset(&(server_address.sin)zero), '\0',8);
+
+if(bind(server_socket,(struct sockaddr*)&server_address,sizeof(struct sockaddress)) == -1){
+  perror("Error when binding server socket.");
+  exit(EXIT_FAILURE);
+ }
+
+if(listen(server_socket,10)==-1){
+  perror("Error while listening to server port");
+  exit(EXIT_FAILURE);
+ }
+
+while(true){
+  socklen_t sin_size = sizeof(struct sockaddr_in);
+  
+  //Connect to remote server
+  struct hostent* he;
+  struct sockaddr_in remote_address;
+  
+  if((he=gethostbyname(app->remote_host)) == NULL){
+    herror("Error with getting host");
+    close(client_socket);
+    continue;
+  }
+
+  if((server_socket=socket(AF_INET,SOCK_STREAM,0))==-1){
+    perror("Error with server socket");
+    close(client_socket);
+    continue;
+  }
+  
+  
+}
+    
+    /*
     //Get server
-    server = gethostbyname(app->remote_server);
+    server = gethostname(app->remote_host, sizeof(app->remote_host)/sizeof(app->remote_host[0]);
     int optval = 1;
     //Set up server address structure
     bzero((char*)&server_address,sizeof(server_address));
-    sever_address.sin_family = AF_INT;
+    server_address.sin_family = AF_INET;
     bcopy((char*)server->h_addr,(char*)&server_address.sin_addr.s_addr, server->h_length);
     server_address.sin_port = htons(app->remote_port);
 
     //Connect to server
     if(connect(remote_socket,(struct sockaddr*)&server_address,sizeof(server_address)) < 0){
-    
+      perror("Error when connecting");
+      write(client_socket, "HTTP/1.0 502 Bad Gateway\n",24);
+      return;
+    }
 
+    //Forward request to remote server
+    n = write(remote_socket,request,strlen(request));
+    if(n<0){
+      perror("Error when writing to socket");
+      exit(EXIT_FAILURE);
+    }
+    //Pass resp back to client
+    while(read(remote_socket,buffer,BUFFER_SIZE-1)>0){
+      n = write(client_socket,buffer,n);
+      if(n<0){
+	perror("Error when writing to socket");
+	exit(EXIT_FAILURE);
+      }
+    }
+    /*
     setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 	
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
@@ -251,6 +313,7 @@ void proxy_remote_file(struct server_app *app, int client_socket, const char *re
         handle_request(&app, client_socket);
         close(client_socket);
     }
-close(server_socket);
-
+    
+close(remote_socket);
+    */
 }
