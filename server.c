@@ -88,6 +88,8 @@ int main(int argc, char *argv[])
         close(client_socket);
     }
 
+
+
     close(server_socket);
     return 0;
 }
@@ -145,14 +147,33 @@ void handle_request(struct server_app *app, int client_socket) {
     // TODO: Parse the header and extract essential fields, e.g. file name
     // Hint: if the requested path is "/" (root), default to index.html
     char file_name[] = "index.html";
+    char* content_type;
+    if (strstr(file_name, ".") == NULL){
+	    content_type = "Content-Type: application/octet-stream\r\n";
+    }	
+    else if(strstr(file_name, ".html") != NULL) {
+	    content_type = "Content-Type: text/html\r\n";
+    }
+    else if(strstr(file_name, ".txt") != NULL) {
+	    content_type = "Content-Type: text/plain\r\n";
+    }
+    else if(strstr(file_name, ".jpg") != NULL) {
+	    content_type = "Content-Type: image/jpeg\r\n";
+    }
+    else if(strstr(file_name,".ts") != NULL){
+    	proxy_remote_file(app,client_socket,file_name);
+    }
+    else {
+	    exit(EXIT_FAILURE)
+    }
+    strcat(request, content_type);
+    strcat(request, "\r\n");
 
     // TODO: Implement proxy and call the function under condition
     // specified in the spec
-    // if (need_proxy(...)) {
-    //    proxy_remote_file(app, client_socket, file_name);
-    // } else {
-    serve_local_file(client_socket, file_name);
-    //}
+    // Will run if file is valid and not .ts
+     serve_local_file(client_socket, file_name);
+     //}
 }
 
 void serve_local_file(int client_socket, const char *path) {
@@ -185,7 +206,51 @@ void proxy_remote_file(struct server_app *app, int client_socket, const char *re
     // Bonus:
     // * When connection to the remote server fail, properly generate
     // HTTP 502 "Bad Gateway" response
-
+	
     char response[] = "HTTP/1.0 501 Not Implemented\r\n\r\n";
     send(client_socket, response, strlen(response), 0);
+
+    int remote_socket;
+    struct hostend *server
+    //Create socket
+    remote_socket = socket(AF_INTE,SOCK_STREAM,0);
+    //Get server
+    server = gethostbyname(app->remote_server);
+    int optval = 1;
+    //Set up server address structure
+    bzero((char*)&server_address,sizeof(server_address));
+    sever_address.sin_family = AF_INT;
+    bcopy((char*)server->h_addr,(char*)&server_address.sin_addr.s_addr, server->h_length);
+    server_address.sin_port = htons(app->remote_port);
+
+    //Connect to server
+    if(connect(remote_socket,(struct sockaddr*)&server_address,sizeof(server_address)) < 0){
+    
+
+    setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+	
+    if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(server_socket, 10) == -1) {
+        perror("listen failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Server listening on port %d\n", app.server_port);
+
+    while (1) {
+        client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_len);
+        if (client_socket == -1) {
+            perror("accept failed");
+            continue;
+	}	    
+        printf("Accepted connection from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        handle_request(&app, client_socket);
+        close(client_socket);
+    }
+close(server_socket);
+
 }
