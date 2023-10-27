@@ -207,7 +207,9 @@ void serve_local_file(int client_socket, const char *path) {
 
     // Determining content type from file extension
     char* content_type = "";
+    bool rawBytesFlag = false;
     if (strstr(path, ".") == NULL){
+      rawBytesFlag = true;
 	    content_type = "Content-Type: application/octet-stream\r\n";
     }	
     else if(strstr(path, ".html") != NULL) {
@@ -216,18 +218,20 @@ void serve_local_file(int client_socket, const char *path) {
     else if(strstr(path, ".txt") != NULL) {
 	    content_type = "Content-Type: text/plain\r\n";
     }
-    else if(strstr(path, ".jpg") != NULL) {
+    else if(strstr(path, ".jpeg") != NULL) {
 	    content_type = "Content-Type: image/jpeg\r\n";
+	    rawBytesFlag = true;
     }
     
     // Predefine the strings/content that may go into the response
     char* statusLine;
-    char* content;
+    char* content = "";
     // Try to read/open file
     FILE* ptr;
-    long fsize;
+    long fsize=0;
     ptr = fopen(path, "r");
     if (ptr==NULL) {
+      puts("Should be here");
       // Set status code to 404 (not found)
       statusLine = "HTTP/1.0 404 Not Found\r\n";
     } else {
@@ -241,8 +245,15 @@ void serve_local_file(int client_socket, const char *path) {
       fclose(ptr);
       content[fsize] = 0;
     }
-    char* response = malloc(strlen(statusLine)+strlen(content_type)+strlen(content)+numlen(fsize)+21);
+    long responseSize = strlen(statusLine)+strlen(content_type)+fsize+numlen(fsize)+21;
+    char* response = malloc(responseSize);
+    puts("Malloc'ed");
     sprintf(response, "%s%sContent-Length %ld\r\n\r\n%s", statusLine, content_type, fsize, content);
+    if (rawBytesFlag) {
+      puts("Using memcpy");
+      memcpy(&response[responseSize-fsize], content, fsize);
+    }
+    printf("%s\n\nstrlen(response): %ld", response, responseSize);
 
     /*
     char responseDemo[] = "HTTP/1.0 200 OK\r\n"
@@ -251,7 +262,7 @@ void serve_local_file(int client_socket, const char *path) {
                       "\r\n"
                       "Sample response";
     */
-    send(client_socket, response, strlen(response), 0);
+    send(client_socket, response, responseSize, 0);
 }
 
 void proxy_remote_file(struct server_app *app, int client_socket, const char *request) {
