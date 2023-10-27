@@ -149,7 +149,7 @@ void handle_request(struct server_app *app, int client_socket) {
     // Regex extraction to get filename
     int status;
     regex_t re;
-    if (regcomp(&re, "GET ([^ ]*) .* ", REG_EXTENDED) != 0) {
+    if (regcomp(&re, "GET /([^ ]*) .* ", REG_EXTENDED) != 0) {
       // Invalid request, want to return 400 error mayber
     } else {
       regmatch_t pmatch[2];
@@ -158,12 +158,12 @@ void handle_request(struct server_app *app, int client_socket) {
       regfree(&re);
       int length = pmatch[1].rm_eo-pmatch[1].rm_so;
       filePath = malloc(length+1);
-      strncpy(filePath, &request[4], length);
+      strncpy(filePath, &request[5], length);
       filePath[length] = 0;
       puts(filePath);
     }
     // Hint: if the requested path is "/" (root), default to index.html
-    if (filePath!=NULL && strcmp(filePath,"/")==0) {
+    if (filePath!=NULL && strcmp(filePath,"")==0) {
       serve_local_file(client_socket, "index.html");
     }
     else {
@@ -206,7 +206,7 @@ void serve_local_file(int client_socket, const char *path) {
     // * Generate a correct response
 
     // Determining content type from file extension
-    char* content_type;
+    char* content_type = "";
     if (strstr(path, ".") == NULL){
 	    content_type = "Content-Type: application/octet-stream\r\n";
     }	
