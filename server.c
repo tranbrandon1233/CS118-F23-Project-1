@@ -162,6 +162,14 @@ void handle_request(struct server_app *app, int client_socket) {
       filePath[length] = 0;
       puts(filePath);
     }
+    // Want to handle .m3u8 file case
+    if (strstr(filePath, ".m3u8")!=NULL) {
+      for (int i=0;i<=0;i++) {
+	proxy_remote_file(app,client_socket,"output0.ts");
+      }
+      return;
+    }
+    
     // Hint: if the requested path is "/" (root), default to index.html
     if (filePath!=NULL && strcmp(filePath,"")==0) {
       serve_local_file(client_socket, "index.html");
@@ -288,8 +296,8 @@ void proxy_remote_file(struct server_app *app, int client_socket, const char *re
     proxyAddr.sin_family = AF_INET;
     proxyAddr.sin_addr.s_addr = INADDR_ANY;
     proxyAddr.sin_port = htons(app->server_port);
-
-    if (bind(proxySocket, (struct sockaddr *) &proxyAddr, sizeof(proxyAddr) < 0)){
+    puts("HERE");
+    if (bind(proxySocket, (struct sockaddr *) &proxyAddr, sizeof(proxyAddr)) < 0){
         perror("Error on binding");
 	exit(EXIT_FAILURE);
     }
