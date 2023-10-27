@@ -218,7 +218,7 @@ void serve_local_file(int client_socket, const char *path) {
     else if(strstr(path, ".txt") != NULL) {
 	    content_type = "Content-Type: text/plain\r\n";
     }
-    else if(strstr(path, ".jpeg") != NULL) {
+    else if(strstr(path, ".jpeg") != NULL || strstr(path, ".jpg") != NULL) {
 	    content_type = "Content-Type: image/jpeg\r\n";
 	    rawBytesFlag = true;
     }
@@ -240,18 +240,18 @@ void serve_local_file(int client_socket, const char *path) {
       fseek(ptr, 0, SEEK_END);
       fsize = ftell(ptr);
       fseek(ptr, 0, SEEK_SET);
-      content = malloc(fsize + 1);
+      content = malloc(fsize);
       fread(content, fsize, 1, ptr);
       fclose(ptr);
-      content[fsize] = 0;
+      if (!rawBytesFlag) content[fsize] = 0;
     }
     long responseSize = strlen(statusLine)+strlen(content_type)+fsize+numlen(fsize)+21;
     char* response = malloc(responseSize);
     puts("Malloc'ed");
-    sprintf(response, "%s%sContent-Length %ld\r\n\r\n%s", statusLine, content_type, fsize, content);
+    sprintf(response, "%s%sContent-Length: %ld\r\n\r\n\r\n%s", statusLine, content_type, fsize, content);
     if (rawBytesFlag) {
       puts("Using memcpy");
-      memcpy(&response[responseSize-fsize], content, fsize);
+      memcpy(&response[responseSize-fsize-1], content, fsize);
     }
     printf("%s\n\nstrlen(response): %ld", response, responseSize);
 
