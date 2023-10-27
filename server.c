@@ -174,6 +174,16 @@ void handle_request(struct server_app *app, int client_socket) {
      //}
 }
 
+// Small helper function that computes # of digits in the input n
+int numlen(long n) {
+  int count = 0;
+  while (n>0) {
+    n /= 10;
+    count++;
+  }
+  return count;
+}
+
 void serve_local_file(int client_socket, const char *path) {
     // TODO: Properly implement serving of local files
     // The following code returns a dummy response for all requests
@@ -186,12 +196,51 @@ void serve_local_file(int client_socket, const char *path) {
     // (When the requested file does not exist):
     // * Generate a correct response
 
-    char response[] = "HTTP/1.0 200 OK\r\n"
+    // Determining content type from file extension
+    char* content_type;
+    if (strstr(path, ".") == NULL){
+	    content_type = "Content-Type: application/octet-stream\r\n";
+    }	
+    else if(strstr(path, ".html") != NULL) {
+	    content_type = "Content-Type: text/html\r\n";
+    }
+    else if(strstr(path, ".txt") != NULL) {
+	    content_type = "Content-Type: text/plain\r\n";
+    }
+    else if(strstr(path, ".jpg") != NULL) {
+	    content_type = "Content-Type: image/jpeg\r\n";
+    }
+    // Predefine the strings/content that may go into the response
+    char* statusLine;
+    char* content;
+    // Try to read/open file
+    FILE* ptr;
+    long fsize;
+    ptr = fopen(path, "r");
+    if (ptr==NULL) {
+      // Set status code to 404 (not found)
+      statusLine = "HTTP/1.0 404 Not Found\r\n";
+    } else {
+      // Set status code to 200 (ok)
+      statusLine = "HTTP/1.0 200 OK\r\n";
+      fseek(ptr, 0, SEEK_END);
+      fsize = ftell(ptr);
+      fseek(f, 0, SEEK_SET);
+      content = malloc(fsize + 1);
+      fread(content, fsize, 1, f);
+      fclose(ptr);
+      content[fsize] = 0;
+    }
+    char* response = malloc(strlen(statusLine)+strlen(content_type)+strlen(content)+numlen(fsize)+21);
+    sprintf(response, "%s%sContent-Length %ld\r\n\r\n%s\0", statusLine, content_type, fsize, content);
+
+    /*
+    char responseDemo[] = "HTTP/1.0 200 OK\r\n"
                       "Content-Type: text/plain; charset=UTF-8\r\n"
                       "Content-Length: 15\r\n"
                       "\r\n"
                       "Sample response";
-
+    */
     send(client_socket, response, strlen(response), 0);
 }
 
