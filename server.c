@@ -87,9 +87,7 @@ int main(int argc, char *argv[])
         handle_request(&app, client_socket);
         close(client_socket);
     }
-
-
-
+    
     close(server_socket);
     return 0;
 }
@@ -209,111 +207,72 @@ void proxy_remote_file(struct server_app *app, int client_socket, const char *re
 	
     char response[] = "HTTP/1.0 501 Not Implemented\r\n\r\n";
     send(client_socket, response, strlen(response), 0);
-    struct sockaddr_in server_address;
-    int server_socket;
-    struct hostend *server;
-    int n;
-    char buffer[BUFFER_SIZE];
-    //Create socket
-    if((server_socket = socket(AF_INET,SOCK_STREAM,0))==-1){
-      perror("Error creating server socket");
-      exit(EXIT_FAILURE);
-    }
-    //Bind server socket to port
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(app.server_port);
-    server_address.sin_addr.s_addr=INNADDR_ANY;
-    memset(&(server_address.sin)zero), '\0',8);
-
-if(bind(server_socket,(struct sockaddr*)&server_address,sizeof(struct sockaddress)) == -1){
-  perror("Error when binding server socket.");
-  exit(EXIT_FAILURE);
- }
-
-if(listen(server_socket,10)==-1){
-  perror("Error while listening to server port");
-  exit(EXIT_FAILURE);
- }
-
-while(true){
-  socklen_t sin_size = sizeof(struct sockaddr_in);
-  
-  //Connect to remote server
-  struct hostent* he;
-  struct sockaddr_in remote_address;
-  
-  if((he=gethostbyname(app->remote_host)) == NULL){
-    herror("Error with getting host");
-    close(client_socket);
-    continue;
-  }
-
-  if((server_socket=socket(AF_INET,SOCK_STREAM,0))==-1){
-    perror("Error with server socket");
-    close(client_socket);
-    continue;
-  }
-  
-  
-}
-    
-    /*
-    //Get server
-    server = gethostname(app->remote_host, sizeof(app->remote_host)/sizeof(app->remote_host[0]);
-    int optval = 1;
-    //Set up server address structure
-    bzero((char*)&server_address,sizeof(server_address));
-    server_address.sin_family = AF_INET;
-    bcopy((char*)server->h_addr,(char*)&server_address.sin_addr.s_addr, server->h_length);
-    server_address.sin_port = htons(app->remote_port);
-
-    //Connect to server
-    if(connect(remote_socket,(struct sockaddr*)&server_address,sizeof(server_address)) < 0){
-      perror("Error when connecting");
-      write(client_socket, "HTTP/1.0 502 Bad Gateway\n",24);
-      return;
-    }
-
-    //Forward request to remote server
-    n = write(remote_socket,request,strlen(request));
-    if(n<0){
-      perror("Error when writing to socket");
-      exit(EXIT_FAILURE);
-    }
-    //Pass resp back to client
-    while(read(remote_socket,buffer,BUFFER_SIZE-1)>0){
-      n = write(client_socket,buffer,n);
-      if(n<0){
-	perror("Error when writing to socket");
+    // Create the proxy server socket
+    int proxySocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (proxySocket < 0){
+        perror("Error opening proxy socket");
 	exit(EXIT_FAILURE);
-      }
     }
-    /*
-    setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
-	
-    if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
+    struct sockaddr_in proxyAddr;
+    bzero((char *) &proxyAddr, sizeof(proxyAddr));
+    proxyAddr.sin_family = AF_INET;
+    proxyAddr.sin_addr.s_addr = INADDR_ANY;
+    proxyAddr.sin_port = htons(app->server_port);
 
-    if (listen(server_socket, 10) == -1) {
-        perror("listen failed");
-        exit(EXIT_FAILURE);
+    if (bind(proxySocket, (struct sockaddr *) &proxyAddr, sizeof(proxyAddr) < 0)){
+        perror("Error on binding");
+	exit(EXIT_FAILURE);
     }
-
-    printf("Server listening on port %d\n", app.server_port);
+    listen(proxySocket, 5);
+    printf("Proxy server is listening on port %d...\n", app->server_port);
 
     while (1) {
-        client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_len);
-        if (client_socket == -1) {
-            perror("accept failed");
-            continue;
-	}	    
-        printf("Accepted connection from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-        handle_request(&app, client_socket);
-        close(client_socket);
+        struct sockaddr_in clientAddr;
+        socklen_t clientLen = sizeof(clientAddr);
+        int clientSocket = accept(proxySocket, (struct sockaddr *) &clientAddr, &clientLen);
+        if (clientSocket < 0){
+            perror("Error accepting client connection");
+	    exit(EXIT_FAILURE);
+	}
+        printf("Accepted connection from %s:%d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
+
+        int remoteSocket = socket(AF_INET, SOCK_STREAM, 0);
+        if (remoteSocket < 0){
+            perror("Error opening remote socket");
+	    exit(EXIT_FAILURE);
+	}
+        struct sockaddr_in remoteAddr;
+        bzero((char *) &remoteAddr, sizeof(remoteAddr));
+        remoteAddr.sin_family = AF_INET;
+        remoteAddr.sin_port = htons(app->remote_port);
+
+        if (inet_pton(AF_INET, app->remote_host, &remoteAddr.sin_addr) <= 0){
+            perror("Invalid remote host address");
+	    exit(EXIT_FAILURE);
+	}
+        if (connect(remoteSocket, (struct sockaddr *) &remoteAddr, sizeof(remoteAddr)) < 0) {
+            // Connection to the remote server failed, send a "Bad Gateway" response
+            char badGateway[] = "HTTP/1.0 502 Bad Gateway\r\n\r\n";
+            send(clientSocket, badGateway, strlen(badGateway), 0);
+	    exit(EXIT_FAILURE);
+        } else {
+            // Forward the original request to the remote server
+            char buffer[BUFFER_SIZE];
+            int bytesRead;
+
+            while ((bytesRead = recv(clientSocket, buffer, BUFFER_SIZE, 0)) > 0) {
+                send(remoteSocket, buffer, bytesRead, 0);
+                memset(buffer, 0, BUFFER_SIZE);
+
+                bytesRead = recv(remoteSocket, buffer, BUFFER_SIZE, 0);
+                send(clientSocket, buffer, bytesRead, 0);
+                memset(buffer, 0, BUFFER_SIZE);
+            }
+        }
+
+        close(clientSocket);
+        close(remoteSocket);
     }
-    
-close(remote_socket);
-    */
+
+    close(proxySocket);
 }
