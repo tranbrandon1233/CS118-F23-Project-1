@@ -1,3 +1,4 @@
+#include <regex.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -141,36 +142,44 @@ void handle_request(struct server_app *app, int client_socket) {
     // copy buffer to a new string
     char *request = malloc(strlen(buffer) + 1);
     strcpy(request, buffer);
+    puts(request);
 
     // TODO: Parse the header and extract essential fields, e.g. file name
+    char* filePath;
+    // Regex extraction to get filename
+    int status;
+    regex_t re;
+    if (regcomp(&re, "GET ([^ ]*) .* ", REG_EXTENDED) != 0) {
+      // Invalid request, want to return 400 error mayber
+    } else {
+      regmatch_t pmatch[2];
+      status = regexec(&re, request, 2, pmatch, 0);
+      printf("strlen(request): %lu\nsubmatch offsets are %lld %lld\n", strlen(request), pmatch[1].rm_so, pmatch[1].rm_eo);
+      regfree(&re);
+      int length = pmatch[1].rm_eo-pmatch[1].rm_so;
+      filePath = malloc(length+1);
+      strncpy(filePath, &request[4], length);
+      filePath[length] = 0;
+      puts(filePath);
+    }
     // Hint: if the requested path is "/" (root), default to index.html
-    char file_name[] = "index.html";
-    char* content_type;
-    if (strstr(file_name, ".") == NULL){
-	    content_type = "Content-Type: application/octet-stream\r\n";
-    }	
-    else if(strstr(file_name, ".html") != NULL) {
-	    content_type = "Content-Type: text/html\r\n";
+    if (filePath!=NULL && strcmp(filePath,"/")==0) {
+      serve_local_file(client_socket, "index.html");
     }
-    else if(strstr(file_name, ".txt") != NULL) {
-	    content_type = "Content-Type: text/plain\r\n";
+    else {
+      serve_local_file(client_socket, filePath);
     }
-    else if(strstr(file_name, ".jpg") != NULL) {
-	    content_type = "Content-Type: image/jpeg\r\n";
-    }
-    else if(strstr(file_name,".ts") != NULL){
-    	proxy_remote_file(app,client_socket,file_name);
+    /* Temporarily removed section for proxy part, the rest of the if branches to determine content type belong in the function below
+     else if(strstr(file_name,".ts") != NULL){
+    	return proxy_remote_file(app,client_socket,file_name);
     }
     else {
       exit(EXIT_FAILURE);
     }
-    strcat(request, content_type);
-    strcat(request, "\r\n");
-
+     */
     // TODO: Implement proxy and call the function under condition
     // specified in the spec
     // Will run if file is valid and not .ts
-     serve_local_file(client_socket, file_name);
      //}
 }
 
@@ -210,6 +219,7 @@ void serve_local_file(int client_socket, const char *path) {
     else if(strstr(path, ".jpg") != NULL) {
 	    content_type = "Content-Type: image/jpeg\r\n";
     }
+    
     // Predefine the strings/content that may go into the response
     char* statusLine;
     char* content;
