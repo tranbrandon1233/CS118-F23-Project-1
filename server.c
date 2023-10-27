@@ -225,14 +225,14 @@ void serve_local_file(int client_socket, const char *path) {
       statusLine = "HTTP/1.0 200 OK\r\n";
       fseek(ptr, 0, SEEK_END);
       fsize = ftell(ptr);
-      fseek(f, 0, SEEK_SET);
+      fseek(ptr, 0, SEEK_SET);
       content = malloc(fsize + 1);
-      fread(content, fsize, 1, f);
+      fread(content, fsize, 1, ptr);
       fclose(ptr);
       content[fsize] = 0;
     }
     char* response = malloc(strlen(statusLine)+strlen(content_type)+strlen(content)+numlen(fsize)+21);
-    sprintf(response, "%s%sContent-Length %ld\r\n\r\n%s\0", statusLine, content_type, fsize, content);
+    sprintf(response, "%s%sContent-Length %ld\r\n\r\n%s", statusLine, content_type, fsize, content);
 
     /*
     char responseDemo[] = "HTTP/1.0 200 OK\r\n"
