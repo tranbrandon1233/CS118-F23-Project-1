@@ -20,8 +20,7 @@
 #define DEFAULT_REMOTE_HOST "131.179.176.34"
 #define DEFAULT_REMOTE_PORT 5001
 
-struct server_app
-{
+struct server_app {
     // Parameters of the server
     // Local port of HTTP server
     uint16_t server_port;
@@ -52,8 +51,7 @@ int main(int argc, char *argv[])
     parse_args(argc, argv, &app);
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_socket == -1)
-    {
+    if (server_socket == -1) {
         perror("socket failed");
         exit(EXIT_FAILURE);
     }
@@ -67,34 +65,30 @@ int main(int argc, char *argv[])
     int optval = 1;
     setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 
-    if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
+    if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
 
-    if (listen(server_socket, 10) == -1)
-    {
+    if (listen(server_socket, 10) == -1) {
         perror("listen failed");
         exit(EXIT_FAILURE);
     }
 
     printf("Server listening on port %d\n", app.server_port);
 
-    while (1)
-    {
-        client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_len);
-        if (client_socket == -1)
-        {
+    while (1) {
+        client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_len);
+        if (client_socket == -1) {
             perror("accept failed");
             continue;
         }
-
+        
         printf("Accepted connection from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
         handle_request(&app, client_socket);
         close(client_socket);
     }
-
+    
     close(server_socket);
     return 0;
 }
@@ -107,10 +101,8 @@ void parse_args(int argc, char *argv[], struct server_app *app)
     app->remote_host = NULL;
     app->remote_port = DEFAULT_REMOTE_PORT;
 
-    while ((opt = getopt(argc, argv, "b:r:p:")) != -1)
-    {
-        switch (opt)
-        {
+    while ((opt = getopt(argc, argv, "b:r:p:")) != -1) {
+        switch (opt) {
         case 'b':
             app->server_port = atoi(optarg);
             break;
@@ -127,14 +119,12 @@ void parse_args(int argc, char *argv[], struct server_app *app)
         }
     }
 
-    if (app->remote_host == NULL)
-    {
+    if (app->remote_host == NULL) {
         app->remote_host = strdup(DEFAULT_REMOTE_HOST);
     }
 }
 
-void handle_request(struct server_app *app, int client_socket)
-{
+void handle_request(struct server_app *app, int client_socket) {
     char buffer[BUFFER_SIZE];
     ssize_t bytes_read;
 
@@ -144,9 +134,8 @@ void handle_request(struct server_app *app, int client_socket)
     // once as a whole.
     // However, the current version suffices for our testing.
     bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-    if (bytes_read <= 0)
-    {
-        return; // Connection closed or error
+    if (bytes_read <= 0) {
+        return;  // Connection closed or error
     }
 
     buffer[bytes_read] = '\0';
@@ -156,38 +145,41 @@ void handle_request(struct server_app *app, int client_socket)
     puts(request);
 
     // TODO: Parse the header and extract essential fields, e.g. file name
-    char *filePath;
+    char* filePath;
     // Regex extraction to get filename
     int status;
     regex_t re;
-    if (regcomp(&re, "GET /([^ ]*) .* ", REG_EXTENDED) != 0)
-    {
-        // Invalid request, want to return 400 error mayber
+    if (regcomp(&re, "GET /([^ ]*) .* ", REG_EXTENDED) != 0) {
+      // Invalid request, want to return 400 error mayber
+    } else {
+      regmatch_t pmatch[2];
+      status = regexec(&re, request, 2, pmatch, 0);
+      printf("strlen(request): %lu\nsubmatch offsets are %lld %lld\n", strlen(request), pmatch[1].rm_so, pmatch[1].rm_eo);
+      regfree(&re);
+      int length = pmatch[1].rm_eo-pmatch[1].rm_so;
+      filePath = malloc(length+1);
+      strncpy(filePath, &request[5], length);
+      filePath[length] = 0;
+      puts(filePath);
     }
-    else
-    {
-        regmatch_t pmatch[2];
-        status = regexec(&re, request, 2, pmatch, 0);
-        printf("strlen(request): %lu\nsubmatch offsets are %lld %lld\n", strlen(request), pmatch[1].rm_so, pmatch[1].rm_eo);
-        regfree(&re);
-        int length = pmatch[1].rm_eo - pmatch[1].rm_so;
-        filePath = malloc(length + 1);
-        strncpy(filePath, &request[5], length);
-        filePath[length] = 0;
-        puts(filePath);
+    // Want to handle .m3u8 file case
+    if (strstr(filePath, ".m3u8")!=NULL) {
+      for (int i=0;i<=0;i++) {
+	proxy_remote_file(app,client_socket,"output0.ts");
+      }
+      return;
     }
+    
     // Hint: if the requested path is "/" (root), default to index.html
-    if (filePath != NULL && strcmp(filePath, "") == 0)
-    {
-        serve_local_file(client_socket, "index.html");
+    if (filePath!=NULL && strcmp(filePath,"")==0) {
+      serve_local_file(client_socket, "index.html");
     }
-    else
-    {
-        serve_local_file(client_socket, filePath);
+    else {
+      serve_local_file(client_socket, filePath);
     }
     /* Temporarily removed section for proxy part, the rest of the if branches to determine content type belong in the function below
      else if(strstr(file_name,".ts") != NULL){
-        return proxy_remote_file(app,client_socket,file_name);
+    	return proxy_remote_file(app,client_socket,file_name);
     }
     else {
       exit(EXIT_FAILURE);
@@ -196,27 +188,24 @@ void handle_request(struct server_app *app, int client_socket)
     // TODO: Implement proxy and call the function under condition
     // specified in the spec
     // Will run if file is valid and not .ts
-    //}
+     //}
 }
 
 // Small helper function that computes # of digits in the input n
-int numlen(long n)
-{
-    int count = 0;
-    while (n > 0)
-    {
-        n /= 10;
-        count++;
-    }
-    return count;
+int numlen(long n) {
+  int count = 0;
+  while (n>0) {
+    n /= 10;
+    count++;
+  }
+  return count;
 }
 
-void serve_local_file(int client_socket, const char *path)
-{
+void serve_local_file(int client_socket, const char *path) {
     // TODO: Properly implement serving of local files
     // The following code returns a dummy response for all requests
     // but it should give you a rough idea about what a proper response looks like
-    // What you need to do
+    // What you need to do 
     // (when the requested file exists):
     // * Open the requested file
     // * Build proper response headers (see details in the spec), and send them
@@ -225,60 +214,52 @@ void serve_local_file(int client_socket, const char *path)
     // * Generate a correct response
 
     // Determining content type from file extension
-    char *content_type = "";
+    char* content_type = "";
     bool rawBytesFlag = false;
-    if (strstr(path, ".") == NULL)
-    {
-        rawBytesFlag = true;
-        content_type = "Content-Type: application/octet-stream\r\n";
+    if (strstr(path, ".") == NULL){
+      rawBytesFlag = true;
+	    content_type = "Content-Type: application/octet-stream\r\n";
+    }	
+    else if(strstr(path, ".html") != NULL) {
+	    content_type = "Content-Type: text/html\r\n";
     }
-    else if (strstr(path, ".html") != NULL)
-    {
-        content_type = "Content-Type: text/html\r\n";
+    else if(strstr(path, ".txt") != NULL) {
+	    content_type = "Content-Type: text/plain\r\n";
     }
-    else if (strstr(path, ".txt") != NULL)
-    {
-        content_type = "Content-Type: text/plain\r\n";
+    else if(strstr(path, ".jpeg") != NULL || strstr(path, ".jpg") != NULL) {
+	    content_type = "Content-Type: image/jpeg\r\n";
+	    rawBytesFlag = true;
     }
-    else if (strstr(path, ".jpeg") != NULL)
-    {
-        content_type = "Content-Type: image/jpeg\r\n";
-        rawBytesFlag = true;
-    }
-
+    
     // Predefine the strings/content that may go into the response
-    char *statusLine;
-    char *content = "";
+    char* statusLine;
+    char* content = "";
     // Try to read/open file
-    FILE *ptr;
-    long fsize = 0;
+    FILE* ptr;
+    long fsize=0;
     ptr = fopen(path, "r");
-    if (ptr == NULL)
-    {
-        puts("Should be here");
-        // Set status code to 404 (not found)
-        statusLine = "HTTP/1.0 404 Not Found\r\n";
+    if (ptr==NULL) {
+      puts("Should be here");
+      // Set status code to 404 (not found)
+      statusLine = "HTTP/1.0 404 Not Found\r\n";
+    } else {
+      // Set status code to 200 (ok)
+      statusLine = "HTTP/1.0 200 OK\r\n";
+      fseek(ptr, 0, SEEK_END);
+      fsize = ftell(ptr);
+      fseek(ptr, 0, SEEK_SET);
+      content = malloc(fsize);
+      fread(content, fsize, 1, ptr);
+      fclose(ptr);
+      if (!rawBytesFlag) content[fsize] = 0;
     }
-    else
-    {
-        // Set status code to 200 (ok)
-        statusLine = "HTTP/1.0 200 OK\r\n";
-        fseek(ptr, 0, SEEK_END);
-        fsize = ftell(ptr);
-        fseek(ptr, 0, SEEK_SET);
-        content = malloc(fsize + 1);
-        fread(content, fsize, 1, ptr);
-        fclose(ptr);
-        content[fsize] = 0;
-    }
-    long responseSize = strlen(statusLine) + strlen(content_type) + fsize + numlen(fsize) + 21;
-    char *response = malloc(responseSize);
+    long responseSize = strlen(statusLine)+strlen(content_type)+fsize+numlen(fsize)+21;
+    char* response = malloc(responseSize);
     puts("Malloc'ed");
-    sprintf(response, "%s%sContent-Length %ld\r\n\r\n%s", statusLine, content_type, fsize, content);
-    if (rawBytesFlag)
-    {
-        puts("Using memcpy");
-        memcpy(&response[responseSize - fsize], content, fsize);
+    sprintf(response, "%s%sContent-Length: %ld\r\n\r\n\r\n%s", statusLine, content_type, fsize, content);
+    if (rawBytesFlag) {
+      puts("Using memcpy");
+      memcpy(&response[responseSize-fsize-1], content, fsize);
     }
     printf("%s\n\nstrlen(response): %ld", response, responseSize);
 
@@ -292,8 +273,7 @@ void serve_local_file(int client_socket, const char *path)
     send(client_socket, response, responseSize, 0);
 }
 
-void proxy_remote_file(struct server_app *app, int client_socket, const char *request)
-{
+void proxy_remote_file(struct server_app *app, int client_socket, const char *request) {
     // TODO: Implement proxy request and replace the following code
     // What's needed:
     // * Connect to remote server (app->remote_server/app->remote_port)
@@ -302,85 +282,55 @@ void proxy_remote_file(struct server_app *app, int client_socket, const char *re
     // Bonus:
     // * When connection to the remote server fail, properly generate
     // HTTP 502 "Bad Gateway" response
-
-    char response[] = "HTTP/1.0 501 Testing\r\n\r\n";
+	
+    char response[] = "HTTP/1.0 501 Not Implemented\r\n\r\n";
     send(client_socket, response, strlen(response), 0);
-    // Create the proxy server socket
-    int proxySocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (proxySocket < 0)
-    {
-        perror("Error opening proxy socket");
-        exit(EXIT_FAILURE);
-    }
-    struct sockaddr_in proxyAddr;
-    bzero((char *)&proxyAddr, sizeof(proxyAddr));
-    proxyAddr.sin_family = AF_INET;
-    proxyAddr.sin_addr.s_addr = INADDR_ANY;
-    proxyAddr.sin_port = htons(app->server_port);
-
-    if (bind(proxySocket, (struct sockaddr *)&proxyAddr, sizeof(proxyAddr) < 0))
-    {
-        perror("Error on binding");
-        exit(EXIT_FAILURE);
-    }
-    listen(proxySocket, 5);
-    printf("Proxy server is listening on port %d...\n", app->server_port);
-
-    while (1)
-    {
+    
         struct sockaddr_in clientAddr;
         socklen_t clientLen = sizeof(clientAddr);
-        int clientSocket = accept(proxySocket, (struct sockaddr *)&clientAddr, &clientLen);
-        if (clientSocket < 0)
-        {
+      
+        if (client_socket < 0){
             perror("Error accepting client connection");
-            exit(EXIT_FAILURE);
-        }
+	    exit(EXIT_FAILURE);
+	}
         printf("Accepted connection from %s:%d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
 
         int remoteSocket = socket(AF_INET, SOCK_STREAM, 0);
-        if (remoteSocket < 0)
-        {
+        if (remoteSocket < 0){
             perror("Error opening remote socket");
-            exit(EXIT_FAILURE);
-        }
+	    exit(EXIT_FAILURE);
+	}
         struct sockaddr_in remoteAddr;
-        bzero((char *)&remoteAddr, sizeof(remoteAddr));
+        bzero((char *) &remoteAddr, sizeof(remoteAddr));
         remoteAddr.sin_family = AF_INET;
         remoteAddr.sin_port = htons(app->remote_port);
 
-        if (inet_pton(AF_INET, app->remote_host, &remoteAddr.sin_addr) <= 0)
-        {
+        if (inet_pton(AF_INET, app->remote_host, &remoteAddr.sin_addr) <= 0){
             perror("Invalid remote host address");
-            exit(EXIT_FAILURE);
-        }
-        if (connect(remoteSocket, (struct sockaddr *)&remoteAddr, sizeof(remoteAddr)) < 0)
-        {
+	    exit(EXIT_FAILURE);
+	}
+        if (connect(remoteSocket, (struct sockaddr *) &remoteAddr, sizeof(remoteAddr)) < 0) {
             // Connection to the remote server failed, send a "Bad Gateway" response
             char badGateway[] = "HTTP/1.0 502 Bad Gateway\r\n\r\n";
-            send(clientSocket, badGateway, strlen(badGateway), 0);
-            exit(EXIT_FAILURE);
-        }
-        else
-        {
+            send(client_socket, badGateway, strlen(badGateway), 0);
+	    exit(EXIT_FAILURE);
+        } else {
             // Forward the original request to the remote server
             char buffer[BUFFER_SIZE];
             int bytesRead;
 
-            while ((bytesRead = recv(clientSocket, buffer, BUFFER_SIZE, 0)) > 0)
-            {
+            while ((bytesRead = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
                 send(remoteSocket, buffer, bytesRead, 0);
                 memset(buffer, 0, BUFFER_SIZE);
 
                 bytesRead = recv(remoteSocket, buffer, BUFFER_SIZE, 0);
-                send(clientSocket, buffer, bytesRead, 0);
+                send(client_socket, buffer, bytesRead, 0);
                 memset(buffer, 0, BUFFER_SIZE);
             }
         }
 
-        close(clientSocket);
+        close(client_socket);
         close(remoteSocket);
-    }
+    
 
-    close(proxySocket);
 }
